@@ -1,6 +1,6 @@
 from PIL import Image,ImageFont,ImageDraw, ImageFilter
 from math import pi, cos, sin, tan
-from random import randint
+from random import randint,random
 
 fig_path = "/mnt/d/lizhe53/Downloads/"
 # 判断字符是否为中文
@@ -35,26 +35,26 @@ def circle(x, y, r):
 
 class Stamp:
     def __init__(self,  edge = 5,               # 图片边缘空白的距离
-                        H = 160,                # 圆心到中层文字下边缘的距离
+                        H = 150,                # 圆心到中层文字下边缘的距离
                         R = 250,                # 圆半径
                         border = 13,            # 字到圆圈内侧的距离
-                        r = 90,                 # 五星外接圆半径
-                        fill = (255, 0, 0, 120),# 印章颜色， 默认纯红色， 透明度0-255，建议90-180
+                        r = 80,                 # 五星外接圆半径
+                        fill = (255, 0, 0, 250),# 印章颜色， 默认纯红色， 透明度0-255，建议90-180
 
                         words_up = "北京航空航天大学", # 上部文字
-                        angle_up = 270,         # 上部文字弧形角度
+                        angle_up = 180,         # 上部文字弧形角度
                         font_size_up = 80,      # 上部文字大小
-                        font_xratio_up = 0.66,  # 上部文字横向变形比例
-                        stroke_width_up = 2,    # 上部文字粗细，一般取值0,1,2,3
+                        font_xratio_up = 0.7,  # 上部文字横向变形比例
+                        stroke_width_up = 1,    # 上部文字粗细，一般取值0,1,2,3
 
-                        words_mid="保密处",   # 中部文字
+                        words_mid="保  密  处",   # 中部文字
                         angle_mid = 72,         # 中部文字弧形角度
-                        font_size_mid = 60,     # 中部文字大小
-                        font_xratio_mid = 0.7,  # 中部文字横向变形比例
+                        font_size_mid = 68,     # 中部文字大小
+                        font_xratio_mid = 0.9,  # 中部文字横向变形比例
                         stroke_width_mid=1,     # 中部文字粗细，一般取值0,1,2
 
                         words_down="1100000023416",# 下部文字
-                        angle_down = 60,        # 下部文字弧形角度
+                        angle_down = 110,        # 下部文字弧形角度
                         font_size_down = 20,    # 下部文字大小
                         font_xratio_down = 1,   # 下部文字横向变形比例
                         stroke_width_down=1,    # 下部文字粗细，一般取值0,1,2
@@ -205,21 +205,40 @@ class Stamp:
             self.draw_rotated_text(img, angle_word_curr, (self.R+self.edge,self.R+self.edge), self.R-self.border*2,
                                    word, self.fill, self.font_size_down, self.font_xratio_down, self.stroke_width_down, font_flip = True)
             angle_word_curr = angle_word_curr + angle_word
-
-        # 随机圈一部分纹理图
-        pos_random = (randint(0,200), randint(0,100))
-        box = (pos_random[0], pos_random[1], pos_random[0]+300, pos_random[1]+300)
-        img_wl_random = self.img_wl.crop(box).rotate(randint(0,360))
-        # 重新设置im2的大小，并进行一次高斯模糊
-        img_wl_random = img_wl_random.resize(img.size).convert('L').filter(ImageFilter.GaussianBlur(1))
-        # 将纹理图的灰度映射到原图的透明度，由于纹理图片自带灰度，映射后会有透明效果，所以fill的透明度不能太低
+        self.total_noise(img)
+        self.edge_noise(img)
+        
+    def edge_noise(self, img):
         L, H = img.size
-        for h in range(H):
-            for l in range(L):
-                dot = (l, h)
-                img.putpixel(dot, img.getpixel(dot)[:3]+(int(img_wl_random.getpixel(dot)/255*img.getpixel(dot)[3]),))
+        for p in range(10000):
+            rand_r = randint(0, self.R)
+            rand_theta = 2*pi*random()
+            l = self.R + rand_r * cos(rand_theta) + self.edge
+            h = self.R + rand_r * sin(rand_theta) + self.edge
+            self.img.putpixel((int(l),int(h)),(255,255,255,90))
+#     (220,18,56,180)
+    def total_noise(self, img):
+        noise_size_rato = 0.8
+        self.img_wl = self.img_wl.resize(img.size)
+        wl_l, wl_h = self.img_wl.size
+        max_l, max_h = int(wl_l * (1 - noise_size_rato)), int(wl_h * (1 - noise_size_rato))
+        unit_l, unit_h = int(wl_l * noise_size_rato), int(wl_h * noise_size_rato)
+        for iters in range(3):
+            # 随机圈一部分纹理图
+            pos_random = (randint(0, max_l), randint(0, max_h))
+            box = (pos_random[0], pos_random[1], pos_random[0]+unit_l, pos_random[1]+unit_h)
+            img_wl_random = self.img_wl.crop(box).rotate(randint(0,360))
+            # 重新设置im2的大小，并进行一次高斯模糊
+            img_wl_random = img_wl_random.resize(img.size).convert("L").filter(ImageFilter.GaussianBlur(1))
+            # 将纹理图的灰度映射到原图的透明度，由于纹理图片自带灰度，映射后会有透明效果，所以fill的透明度不能太低
+            L, H = img.size
+            for h in range(H):
+                for l in range(L):
+                    dot = (l, h)
+#                     wl_dot = (l - box[0], h - box[1])
+                    img.putpixel(dot, img.getpixel(dot)[:3]+(int(img_wl_random.getpixel(dot)/255*img.getpixel(dot)[3]),))
         # 进行一次高斯模糊，提高真实度
-        self.img = img.filter(ImageFilter.GaussianBlur(0.6))
+        self.img = img.filter(ImageFilter.GaussianBlur(0.3))
 
     def show_stamp(self):
         if self.img:
